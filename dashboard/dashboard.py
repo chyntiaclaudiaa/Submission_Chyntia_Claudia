@@ -5,8 +5,8 @@ import streamlit as st
 from datetime import datetime
 
 st.set_page_config(
-    page_title="E-Commerce Performance Insights",
-    page_icon="📊",
+    page_title="E-Commerce Performance Dashboard",
+    page_icon="🛍️",
     layout="wide"
 )
 
@@ -22,152 +22,138 @@ def load_data():
 all_df = load_data()
 
 with st.sidebar:
-    st.title("📊 Business Analytics")
-    st.markdown("This dashboard analyzes the performance of the E-Commerce Public Dataset.")
+    st.markdown("""
+        <div style="text-align: center; margin-top: -20px;">
+            <h1 style="color: #72BCD4; margin-bottom: 0px;">🛍️ E-Shop</h1>
+            <p style="font-size: 0.9em; margin-top: 0px;">Project Analisis Data</p>
+        </div>
+    """, unsafe_allow_html=True)
     
+    st.markdown("---")
+    
+    st.write("### Filter Analisis")
     min_date = all_df["order_purchase_timestamp"].min()
     max_date = all_df["order_purchase_timestamp"].max()
     
-    start_date, end_date = st.date_input(
-        "Select Date Range:",
+    start_date = st.date_input(
+        label='Tanggal Mulai',
         min_value=min_date,
         max_value=max_date,
-        value=[min_date, max_date]
+        value=min_date
     )
+    
+    end_date = st.date_input(
+        label='Tanggal Akhir',
+        min_value=min_date,
+        max_value=max_date,
+        value=max_date
+    )
+    
+    st.markdown("---")
+    
+    st.caption("Dashboard ini memvisualisasikan insight dari E-Commerce Public Dataset.")
 
-main_df = all_df[(all_df["order_purchase_timestamp"] >= str(start_date)) & 
-                 (all_df["order_purchase_timestamp"] <= str(end_date))]
+main_df = all_df[(all_df["order_purchase_timestamp"] >= pd.to_datetime(start_date)) & 
+                 (all_df["order_purchase_timestamp"] <= pd.to_datetime(end_date))]
 
 st.title("E-Commerce Intelligence Dashboard 🚀")
-st.info(f"Analyzing data from **{start_date}** to **{end_date}**")
+st.info(f"Menampilkan data periode: **{start_date}** hingga **{end_date}**")
 
-tab_overview, tab_product, tab_rfm = st.tabs(["📈 Business Overview", "📦 Product Analytics", "💎 Customer RFM"])
+tab_growth, tab_product, tab_delivery, tab_customer = st.tabs([
+    "📈 Growth & Revenue", "📦 Product & Payments", "🚚 Delivery & Satisfaction", "💎 Customer RFM"
+])
 
-with tab_overview:
-    m1, m2, m3, m4 = st.columns(4)
+color_main = "#72BCD4"
+color_sub = "#D3D3D3"
+color_alert = "#E38690"
+
+with tab_growth:
+    st.subheader("Business Growth Trend")
+    m1, m2, m3 = st.columns(3)
     with m1:
-        st.metric("Total Orders", f"{main_df.order_id.nunique():,}")
+        st.metric("Total Unique Orders", f"{main_df.order_id.nunique():,}")
     with m2:
-        st.metric("Total Revenue", f"R$ {main_df.payment_value.sum():,.0f}")
+        st.metric("Total Revenue", f"R$ {main_df.payment_value.sum():,.2f}")
     with m3:
         order_count = main_df.order_id.nunique()
         aov = main_df.payment_value.sum() / order_count if order_count > 0 else 0
         st.metric("Avg Order Value", f"R$ {aov:,.2f}")
-    with m4:
-        st.metric("Unique Customers", f"{main_df.customer_unique_id.nunique():,}")
 
-    st.subheader("Revenue Trend Over Time")
-    daily_revenue = main_df.resample(rule='D', on='order_purchase_timestamp').agg({"payment_value": "sum"}).reset_index()
-    
-    fig, ax = plt.subplots(figsize=(16, 5))
-    ax.plot(daily_revenue["order_purchase_timestamp"], daily_revenue["payment_value"], color="#1f77b4", linewidth=1.5)
-    ax.fill_between(daily_revenue["order_purchase_timestamp"], daily_revenue["payment_value"], color="#1f77b4", alpha=0.1)
-    ax.set_ylabel("Revenue (R$)")
-    st.pyplot(fig)
-
-with tab_product:
-    st.subheader("Product Performance Analysis")
-    
-    product_sales = main_df.groupby("product_category_name").order_id.nunique().sort_values(ascending=False).reset_index()
-    product_revenue = main_df.groupby("product_category_name").payment_value.sum().sort_values(ascending=False).reset_index()
-    
-    blue_palette = ["#90CAF9", "#D3D3D3", "#D3D3D3", "#D3D3D3", "#D3D3D3"]
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.write("#### 🏆 Top 5 Categories by Sales Volume")
-        fig, ax = plt.subplots(figsize=(10, 6))
-        sns.barplot(x="order_id", y="product_category_name", data=product_sales.head(5), palette=blue_palette, ax=ax)
-        ax.set_xlabel("Number of Sales")
-        ax.set_ylabel(None)
-        st.pyplot(fig)
-
-    with col2:
-        st.write("#### 🔻 Bottom 5 Categories by Sales Volume")
-        fig, ax = plt.subplots(figsize=(10, 6))
-        sns.barplot(x="order_id", y="product_category_name", data=product_sales.tail(5), palette=blue_palette, ax=ax)
-        ax.set_xlabel("Number of Sales")
-        ax.set_ylabel(None)
-        ax.invert_xaxis()
-        ax.yaxis.set_label_position("right")
-        ax.yaxis.tick_right()
-        st.pyplot(fig)
-
-    st.write("---")
-    
-    st.write("#### 💰 Top 5 Categories by Total Revenue")
-    fig_rev, ax_rev = plt.subplots(figsize=(16, 6))
-    sns.barplot(x="payment_value", y="product_category_name", data=product_revenue.head(5), palette=blue_palette, ax=ax_rev)
-    ax_rev.set_xlabel("Total Revenue (R$)")
-    ax_rev.set_ylabel(None)
-    st.pyplot(fig_rev)
-
-with tab_rfm:
-    st.subheader("Best Customer Based on RFM Parameters")
-    
-    ref_date = main_df['order_purchase_timestamp'].max() + pd.DateOffset(days=1)
-    rfm = main_df.groupby("customer_unique_id").agg({
-        "order_purchase_timestamp": lambda x: (ref_date - x.max()).days,
+    monthly_trend = main_df.resample(rule='ME', on='order_purchase_timestamp').agg({
         "order_id": "nunique",
         "payment_value": "sum"
     }).reset_index()
-    rfm.columns = ["cust_id", "Recency", "Frequency", "Monetary"]
-    rfm['cust_id_short'] = rfm['cust_id'].str[:5]
+    monthly_trend["order_purchase_timestamp"] = monthly_trend["order_purchase_timestamp"].dt.strftime('%b-%Y')
 
-    col_a, col_b, col_c = st.columns(3)
-    col_a.metric("Avg Recency", f"{rfm.Recency.mean():.1f} Days")
-    col_b.metric("Avg Frequency", f"{rfm.Frequency.mean():.2f} Orders")
-    col_c.metric("Avg Monetary", f"R$ {rfm.Monetary.mean():,.2f}")
-
-    fig, ax = plt.subplots(nrows=1, ncols=3, figsize=(35, 15))
-    colors_rfm = ["#90CAF9", "#90CAF9", "#90CAF9", "#90CAF9", "#90CAF9"]
-
-    sns.barplot(y="Recency", x="cust_id_short", data=rfm.sort_values(by="Recency", ascending=True).head(5), palette=colors_rfm, ax=ax[0])
-    ax[0].set_title("By Recency (days)", fontsize=50)
-    ax[0].tick_params(axis='y', labelsize=30)
-    ax[0].tick_params(axis='x', labelsize=35)
-
-    sns.barplot(y="Frequency", x="cust_id_short", data=rfm.sort_values(by="Frequency", ascending=False).head(5), palette=colors_rfm, ax=ax[1])
-    ax[1].set_title("By Frequency", fontsize=50)
-    ax[1].tick_params(axis='y', labelsize=30)
-    ax[1].tick_params(axis='x', labelsize=35)
-
-    sns.barplot(y="Monetary", x="cust_id_short", data=rfm.sort_values(by="Monetary", ascending=False).head(5), palette=colors_rfm, ax=ax[2])
-    ax[2].set_title("By Monetary", fontsize=50)
-    ax[2].tick_params(axis='y', labelsize=30)
-    ax[2].tick_params(axis='x', labelsize=35)
+    fig, ax = plt.subplots(figsize=(16, 5))
+    ax.plot(monthly_trend["order_purchase_timestamp"], monthly_trend["payment_value"], marker='o', linewidth=2, color=color_main)
+    ax.set_title("Monthly Revenue Trend (BRL)", fontsize=18)
+    plt.xticks(rotation=45)
     st.pyplot(fig)
 
-    st.write("---")
-
-    st.write("#### Customer Segmentation & Data Details")
-    col_table, col_pie = st.columns([1.5, 1])
+with tab_product:
+    st.subheader("Product & Payment Performance")
+    col1, col2 = st.columns(2)
     
-    with col_table:
-        st.write("**Top 10 Customers by Revenue**")
-        st.dataframe(rfm.sort_values("Monetary", ascending=False).head(10), use_container_width=True, hide_index=True)
+    with col1:
+        st.write("#### 🏆 Top 5 Categories by Volume")
+        top_volume = main_df.groupby("product_category_name_english").order_id.nunique().sort_values(ascending=False).head(5).reset_index()
+        fig, ax = plt.subplots()
+        sns.barplot(x="order_id", y="product_category_name_english", data=top_volume, 
+                    palette=[color_main] + [color_sub]*4, hue="product_category_name_english", legend=False, ax=ax)
+        st.pyplot(fig)
+        
+    with col2:
+        st.write("#### 💳 Avg Transaction Value by Payment")
+        avg_payment = main_df.groupby("payment_type").payment_value.mean().sort_values(ascending=False).reset_index()
+        fig, ax = plt.subplots()
+        sns.barplot(x="payment_value", y="payment_type", data=avg_payment, 
+                    palette=[color_main] + [color_sub]*4, hue="payment_type", legend=False, ax=ax)
+        st.pyplot(fig)
 
-    with col_pie:
-        st.write("**Customer Value Share**")
-        rfm['Segment'] = pd.cut(rfm['Monetary'], 
-                                bins=[0, 150, 600, float('inf')], 
-                                labels=['Silver', 'Gold', 'Platinum'])
-        seg_counts = rfm['Segment'].value_counts().sort_index()
+with tab_delivery:
+    st.subheader("Delivery Efficiency & Impact on Rating")
+    col_d1, col_d2 = st.columns(2)
+    
+    with col_d1:
+        st.write("#### 🚚 Delivery Status Distribution")
+        delivery_perf = main_df["delivery_performance"].value_counts().reset_index()
+        fig, ax = plt.subplots()
+        ax.pie(delivery_perf["count"], labels=delivery_perf["delivery_performance"], autopct='%1.1f%%', colors=[color_main, color_alert])
+        st.pyplot(fig)
         
-        fig_pie, ax_pie = plt.subplots(figsize=(6, 6))
-        colors_pie = ['#CD7F32','#FFD700','#E5E4E2'] 
-        
-        wedges, texts, autotexts = ax_pie.pie(
-            seg_counts, 
-            autopct='%1.1f%%', 
-            startangle=140, 
-            colors=colors_pie,
-            wedgeprops={'edgecolor': 'white', 'linewidth': 2, 'width': 0.4},
-            textprops={'fontsize': 10, 'fontweight': 'bold'}
-        )
-        
-        ax_pie.legend(wedges, seg_counts.index, title="Segments", loc="center left", bbox_to_anchor=(1, 0, 0.5, 1))
-        st.pyplot(fig_pie)
+    with col_d2:
+        st.write("#### ⭐ Avg Rating: On-Time vs Late")
+        rating_impact = main_df.groupby("delivery_performance").review_score.mean().sort_values(ascending=False).reset_index()
+        fig, ax = plt.subplots()
+        sns.barplot(x="review_score", y="delivery_performance", data=rating_impact, palette=[color_main, color_alert], hue="delivery_performance", legend=False, ax=ax)
+        ax.set_xlim(0, 5)
+        st.pyplot(fig)
+
+with tab_customer:
+    st.subheader("Best Customer Based on RFM Parameters")
+    
+    snapshot_date = main_df['order_purchase_timestamp'].max() + pd.Timedelta(days=1)
+    rfm_df = main_df.groupby("customer_unique_id").agg({
+        "order_purchase_timestamp": lambda x: (snapshot_date - x.max()).days,
+        "order_id": "nunique",
+        "payment_value": "sum"
+    }).reset_index()
+    rfm_df.columns = ["cust_id", "Recency", "Frequency", "Monetary"]
+    rfm_df['cust_id_short'] = rfm_df['cust_id'].str[:5]
+
+    fig, ax = plt.subplots(nrows=1, ncols=3, figsize=(30, 10))
+    
+    sns.barplot(y="Recency", x="cust_id_short", data=rfm_df.sort_values("Recency").head(5), palette=[color_main] + [color_sub]*4, hue="cust_id_short", legend=False, ax=ax[0])
+    ax[0].set_title("By Recency (days)", fontsize=30)
+    
+    sns.barplot(y="Frequency", x="cust_id_short", data=rfm_df.sort_values("Frequency", ascending=False).head(5), palette=[color_main] + [color_sub]*4, hue="cust_id_short", legend=False, ax=ax[1])
+    ax[1].set_title("By Frequency", fontsize=30)
+
+    sns.barplot(y="Monetary", x="cust_id_short", data=rfm_df.sort_values("Monetary", ascending=False).head(5), palette=[color_main] + [color_sub]*4, hue="cust_id_short", legend=False, ax=ax[2])
+    ax[2].set_title("By Monetary", fontsize=30)
+    
+    st.pyplot(fig)
 
 st.markdown("---")
-st.caption(f"Copyright © {datetime.now().year} | Data Analysis Project - Chyntia Claudia | Dicoding Student ID: CDCC319D6X2689")
+st.caption(f"Copyright © {datetime.now().year} | Chyntia Claudia | Dicoding Student ID: CDCC319D6X2689")
